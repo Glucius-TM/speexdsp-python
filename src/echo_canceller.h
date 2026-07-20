@@ -1,4 +1,3 @@
-
 #ifndef __ECHO_CANCELLER_H__
 #define __ECHO_CANCELLER_H__
 
@@ -11,6 +10,9 @@ public:
     static EchoCanceller* create(int frame_size=256, int filter_length=2048, int sample_rate=16000, int mics=1, int speakers=1);
 
     virtual std::string process(const std::string& near, const std::string& far) = 0;
+
+    // Reinitialize internal Speex state after a discontinuity.
+    virtual void reset() = 0;
 
     virtual ~EchoCanceller() {}
 };

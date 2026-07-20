@@ -1,4 +1,3 @@
-
 #include <stdint.h>
 
 #include "echo_canceller.h"
@@ -16,7 +15,17 @@ public:
 
     std::string process(const std::string& near, const std::string& far);
 
+    void reset();
+
 private:
+    void initialize_state();
+
+    int frame_size;
+    int filter_length;
+    int sample_rate;
+    int mics;
+    int speakers;
+
     SpeexEchoState *st;
     // SpeexPreprocessState *den;
 
@@ -33,7 +42,28 @@ EchoCanceller* EchoCanceller::create(int frame_size, int filter_length, int samp
 
 
 EchoCancellerImpl::EchoCancellerImpl(int frame_size, int filter_length, int sample_rate, int mics, int speakers)
+    : frame_size(frame_size),
+      filter_length(filter_length),
+      sample_rate(sample_rate),
+      mics(mics),
+      speakers(speakers),
+      st(nullptr),
+      e(nullptr),
+      frames(0)
 {
+    initialize_state();
+}
+
+void EchoCancellerImpl::initialize_state()
+{
+    if (st != nullptr) {
+        speex_echo_state_destroy(st);
+        st = nullptr;
+    }
+
+    delete[] e;
+    e = nullptr;
+
     st = speex_echo_state_init_mc(frame_size, filter_length, mics, speakers);
     speex_echo_ctl(st, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate);
 
@@ -50,7 +80,12 @@ EchoCancellerImpl::~EchoCancellerImpl()
 
     // speex_preprocess_state_destroy(den);
 
-    delete e;
+    delete[] e;
+}
+
+void EchoCancellerImpl::reset()
+{
+    initialize_state();
 }
 
 std::string EchoCancellerImpl::process(const std::string& near, const std::string& far)
@@ -65,4 +100,3 @@ std::string EchoCancellerImpl::process(const std::string& near, const std::strin
 
     return std::string((const char *)e, frames * sizeof(int16_t));
 }
-

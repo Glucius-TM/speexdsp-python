@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import sys
 from glob import glob
-from setuptools import setup, Extension
-from distutils.command.build import build
+from pathlib import Path
+
+from setuptools import Extension, setup
 
 
-with open('README.md') as f:
-    long_description = f.read()
+README = Path('README.md').read_text(encoding='utf-8')
 
 include_dirs = ['src']
 libraries = ['speexdsp', 'stdc++']
@@ -27,17 +26,18 @@ swig_opts = (
 
 setup(
     name='speexdsp',
-    version='0.1.1',
+    version='0.1.2',
     description='Python bindings of speexdsp library',
-    long_description=long_description,
+    long_description=README,
     long_description_content_type='text/markdown',
     author='Yihui Xiong',
     author_email='yihui.xiong@hotmail.com',
-    maintainer='Yihui Xiong',
+    maintainer='Glucius-TM',
     maintainer_email='yihui.xiong@hotmail.com',
-    url='https://github.com/xiongyihui/speexdsp-python',
-    download_url='https://pypi.python.org/pypi/speexdsp',
+    url='https://github.com/Glucius-TM/speexdsp-python',
+    download_url='https://github.com/Glucius-TM/speexdsp-python',
     packages=['speexdsp'],
+    package_dir={'speexdsp': 'src'},
     ext_modules=[
         Extension(
             name='speexdsp._speexdsp',
@@ -46,27 +46,18 @@ setup(
             include_dirs=include_dirs,
             libraries=libraries,
             define_macros=define_macros,
-            extra_compile_args=extra_compile_args
+            extra_compile_args=extra_compile_args,
         )
     ],
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: BSD License',
-        'Operating System :: POSIX :: Linux',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: C++'
+        'Programming Language :: C++',
+        'Operating System :: POSIX :: Linux',
     ],
     license='BSD',
     keywords=['speexdsp', 'acoustic echo cancellation'],
     platforms=['Linux'],
-    package_dir={
-        'speexdsp': 'src'
-    }
+    python_requires='>=3.8',
 )

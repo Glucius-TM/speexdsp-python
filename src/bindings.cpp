@@ -84,16 +84,16 @@ public:
             far_ptr = far_storage.data();
         }
 
-        py::gil_scoped_release release;
-
         std::vector<int16_t> out_storage(static_cast<size_t>(expected_samples));
-        impl_->process(near_ptr, far_ptr, out_storage.data());
+        {
+            py::gil_scoped_release release;
+            impl_->process(near_ptr, far_ptr, out_storage.data());
+        }
 
         if (return_bytes) {
             return py::bytes(reinterpret_cast<const char*>(out_storage.data()), expected_bytes);
         }
 
-        py::gil_scoped_acquire acquire;
         py::array_t<int16_t> out(expected_samples);
         auto out_info = out.request();
         std::memcpy(out_info.ptr, out_storage.data(), static_cast<size_t>(expected_bytes));

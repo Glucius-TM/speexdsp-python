@@ -1,3 +1,1 @@
-
-
-from .speexdsp import *
+from ._speexdsp import *

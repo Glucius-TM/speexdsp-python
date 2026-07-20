@@ -32,6 +32,8 @@ setup(
     download_url='https://github.com/Glucius-TM/speexdsp-python',
     packages=['speexdsp'],
     package_dir={'speexdsp': 'src'},
+    package_data={'speexdsp': ['py.typed']},
+    include_package_data=True,
     ext_modules=ext_modules,
     cmdclass={'build_ext': build_ext},
     classifiers=[

@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -13,7 +14,7 @@ namespace py = pybind11;
 
 namespace {
 
-constexpr ssize_t kSampleBytes = static_cast<ssize_t>(sizeof(int16_t));
+constexpr std::size_t kSampleBytes = sizeof(int16_t);
 
 class PyEchoCanceller {
 public:
@@ -43,23 +44,23 @@ public:
         auto near_info = near.request();
         auto far_info = far.request();
 
-        const ssize_t expected_samples = static_cast<ssize_t>(frame_size_) * static_cast<ssize_t>(mics_);
-        const ssize_t expected_bytes = expected_samples * kSampleBytes;
+        const std::size_t expected_samples = static_cast<std::size_t>(frame_size_) * static_cast<std::size_t>(mics_);
+        const std::size_t expected_bytes = expected_samples * kSampleBytes;
 
-        const ssize_t near_bytes = static_cast<ssize_t>(near_info.size) * static_cast<ssize_t>(near_info.itemsize);
-        const ssize_t far_bytes = static_cast<ssize_t>(far_info.size) * static_cast<ssize_t>(far_info.itemsize);
+        const std::size_t near_bytes = static_cast<std::size_t>(near_info.size) * static_cast<std::size_t>(near_info.itemsize);
+        const std::size_t far_bytes = static_cast<std::size_t>(far_info.size) * static_cast<std::size_t>(far_info.itemsize);
         if (near_bytes != expected_bytes || far_bytes != expected_bytes) {
             throw py::value_error("expected one-dimensional buffers matching frame_size * mics (in int16 samples)");
         }
 
-        const bool near_is_int16 = near_info.itemsize == kSampleBytes;
-        const bool far_is_int16 = far_info.itemsize == kSampleBytes;
+        const bool near_is_int16 = near_info.itemsize == static_cast<py::ssize_t>(kSampleBytes);
+        const bool far_is_int16 = far_info.itemsize == static_cast<py::ssize_t>(kSampleBytes);
         const bool return_bytes = near_info.itemsize == 1 && far_info.itemsize == 1;
 
-        if (near_is_int16 && !near_info.strides.empty() && near_info.strides[0] != kSampleBytes) {
+        if (near_is_int16 && !near_info.strides.empty() && static_cast<std::size_t>(near_info.strides[0]) != kSampleBytes) {
             throw py::value_error("near buffer must be contiguous when passed as int16");
         }
-        if (far_is_int16 && !far_info.strides.empty() && far_info.strides[0] != kSampleBytes) {
+        if (far_is_int16 && !far_info.strides.empty() && static_cast<std::size_t>(far_info.strides[0]) != kSampleBytes) {
             throw py::value_error("far buffer must be contiguous when passed as int16");
         }
 
@@ -71,32 +72,32 @@ public:
         if (near_is_int16) {
             near_ptr = static_cast<const int16_t*>(near_info.ptr);
         } else {
-            near_storage.resize(static_cast<size_t>(expected_samples));
-            std::memcpy(near_storage.data(), near_info.ptr, static_cast<size_t>(expected_bytes));
+            near_storage.resize(expected_samples);
+            std::memcpy(near_storage.data(), near_info.ptr, expected_bytes);
             near_ptr = near_storage.data();
         }
 
         if (far_is_int16) {
             far_ptr = static_cast<const int16_t*>(far_info.ptr);
         } else {
-            far_storage.resize(static_cast<size_t>(expected_samples));
-            std::memcpy(far_storage.data(), far_info.ptr, static_cast<size_t>(expected_bytes));
+            far_storage.resize(expected_samples);
+            std::memcpy(far_storage.data(), far_info.ptr, expected_bytes);
             far_ptr = far_storage.data();
         }
 
-        std::vector<int16_t> out_storage(static_cast<size_t>(expected_samples));
+        std::vector<int16_t> out_storage(expected_samples);
         {
             py::gil_scoped_release release;
             impl_->process(near_ptr, far_ptr, out_storage.data());
         }
 
         if (return_bytes) {
-            return py::bytes(reinterpret_cast<const char*>(out_storage.data()), expected_bytes);
+            return py::bytes(reinterpret_cast<const char*>(out_storage.data()), static_cast<py::ssize_t>(expected_bytes));
         }
 
-        py::array_t<int16_t> out(expected_samples);
+        py::array_t<int16_t> out(static_cast<py::ssize_t>(expected_samples));
         auto out_info = out.request();
-        std::memcpy(out_info.ptr, out_storage.data(), static_cast<size_t>(expected_bytes));
+        std::memcpy(out_info.ptr, out_storage.data(), expected_bytes);
         return out;
     }
 

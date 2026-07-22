@@ -48,6 +48,7 @@ print(type(clean), clean.dtype, clean.shape)
 
 - Use one canceller instance per channel.
 - Keep near-end and far-end aligned in time.
+- Inputs must be contiguous `numpy.ndarray[int16]` buffers.
 - Recommended frame size: 10–20 ms.
 - Recommended filter tail: 100–500 ms.
 

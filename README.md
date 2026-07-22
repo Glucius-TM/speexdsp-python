@@ -52,6 +52,17 @@ print(type(clean), clean.dtype, clean.shape)
 - Recommended frame size: 10–20 ms.
 - Recommended filter tail: 100–500 ms.
 
+## Benchmark
+
+Comparative benchmark run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations.
+
+| Version | Avg time | Relative |
+| --- | ---: | ---: |
+| Current pybind11 build | 43.58 us/frame | 0.851x |
+| Original release (`speexdsp==0.1.1`) | 37.07 us/frame | 1.000x |
+
+In this run, the current build is still slower than the original by about 17.6%.
+
 ## API
 
 - `EchoCanceller.create(frame_size=256, filter_length=2048, sample_rate=16000, mics=1, speakers=1)`

@@ -3,7 +3,6 @@
 #include <cstring>
 #include <memory>
 #include <stdexcept>
-#include <vector>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -38,11 +37,15 @@ public:
         return std::make_unique<PyEchoCanceller>(frame_size, filter_length, sample_rate, mics, speakers);
     }
 
-    py::object process(py::buffer near, py::buffer far) {
+    py::array_t<int16_t> process(py::buffer near, py::buffer far) {
         ensure_alive();
 
         auto near_info = near.request();
         auto far_info = far.request();
+
+        if (near_info.ndim != 1 || far_info.ndim != 1) {
+            throw py::type_error("expected one-dimensional contiguous int16 buffers");
+        }
 
         const std::size_t expected_samples = static_cast<std::size_t>(frame_size_) * static_cast<std::size_t>(mics_);
         const std::size_t expected_bytes = expected_samples * kSampleBytes;
@@ -50,40 +53,21 @@ public:
         const std::size_t near_bytes = static_cast<std::size_t>(near_info.size) * static_cast<std::size_t>(near_info.itemsize);
         const std::size_t far_bytes = static_cast<std::size_t>(far_info.size) * static_cast<std::size_t>(far_info.itemsize);
         if (near_bytes != expected_bytes || far_bytes != expected_bytes) {
-            throw py::value_error("expected one-dimensional buffers matching frame_size * mics (in int16 samples)");
+            throw py::type_error("expected frame_size * mics int16 samples in each input buffer");
         }
 
-        const bool near_is_int16 = near_info.itemsize == static_cast<py::ssize_t>(kSampleBytes);
-        const bool far_is_int16 = far_info.itemsize == static_cast<py::ssize_t>(kSampleBytes);
-        const bool return_bytes = near_info.itemsize == 1 && far_info.itemsize == 1;
-
-        if (near_is_int16 && !near_info.strides.empty() && static_cast<std::size_t>(near_info.strides[0]) != kSampleBytes) {
-            throw py::value_error("near buffer must be contiguous when passed as int16");
-        }
-        if (far_is_int16 && !far_info.strides.empty() && static_cast<std::size_t>(far_info.strides[0]) != kSampleBytes) {
-            throw py::value_error("far buffer must be contiguous when passed as int16");
+        if (near_info.itemsize != static_cast<py::ssize_t>(kSampleBytes) ||
+            far_info.itemsize != static_cast<py::ssize_t>(kSampleBytes)) {
+            throw py::type_error("expected numpy.ndarray[int16] inputs");
         }
 
-        std::vector<int16_t> near_storage;
-        std::vector<int16_t> far_storage;
-        const int16_t* near_ptr = nullptr;
-        const int16_t* far_ptr = nullptr;
-
-        if (near_is_int16) {
-            near_ptr = static_cast<const int16_t*>(near_info.ptr);
-        } else {
-            near_storage.resize(expected_samples);
-            std::memcpy(near_storage.data(), near_info.ptr, expected_bytes);
-            near_ptr = near_storage.data();
+        if ((!near_info.strides.empty() && static_cast<std::size_t>(near_info.strides[0]) != kSampleBytes) ||
+            (!far_info.strides.empty() && static_cast<std::size_t>(far_info.strides[0]) != kSampleBytes)) {
+            throw py::type_error("expected C-contiguous int16 arrays");
         }
 
-        if (far_is_int16) {
-            far_ptr = static_cast<const int16_t*>(far_info.ptr);
-        } else {
-            far_storage.resize(expected_samples);
-            std::memcpy(far_storage.data(), far_info.ptr, expected_bytes);
-            far_ptr = far_storage.data();
-        }
+        const auto* near_ptr = static_cast<const int16_t*>(near_info.ptr);
+        const auto* far_ptr = static_cast<const int16_t*>(far_info.ptr);
 
         py::array_t<int16_t> out(static_cast<py::ssize_t>(expected_samples));
         auto out_info = out.request();
@@ -92,10 +76,6 @@ public:
         {
             py::gil_scoped_release release;
             impl_->process(near_ptr, far_ptr, out_ptr);
-        }
-
-        if (return_bytes) {
-            return py::bytes(reinterpret_cast<const char*>(out_ptr), static_cast<py::ssize_t>(expected_bytes));
         }
 
         return out;
@@ -155,7 +135,7 @@ PYBIND11_MODULE(_speexdsp, m) {
                     py::arg("speakers") = 1)
         .def("process", &PyEchoCanceller::process,
              py::arg("near"), py::arg("far"),
-             R"pbdoc(Cancel echo using near-end and far-end buffers. Accepts bytes-like buffers or contiguous numpy int16 arrays.)pbdoc")
+             R"pbdoc(Cancel echo using near-end and far-end contiguous numpy int16 arrays.)pbdoc")
         .def("reset", &PyEchoCanceller::reset)
         .def("destroy", &PyEchoCanceller::destroy)
         .def_property_readonly("ok", &PyEchoCanceller::ok)

@@ -18,11 +18,11 @@ def test_echo_canceller_smoke():
     near = np.zeros(frame_size, dtype=np.int16)
     far = np.zeros(frame_size, dtype=np.int16)
 
-    out = ec.process(near, far)
-
-    assert isinstance(out, np.ndarray)
-    assert out.dtype == np.int16
-    assert out.shape == (frame_size,)
+    for _ in range(16):
+        out = ec.process(near, far)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.int16
+        assert out.shape == (frame_size,)
 
     ec.reset()
     out2 = ec.process(near, far)

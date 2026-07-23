@@ -1,11 +1,9 @@
-#include <stdint.h>
-
+#include <cstdint>
 #include <stdexcept>
 
 #include "echo_canceller.h"
 
 #include "speex/speex_echo.h"
-#include "speex/speex_preprocess.h"
 
 
 class EchoCancellerImpl : public EchoCanceller
@@ -29,7 +27,6 @@ private:
     int speakers;
 
     SpeexEchoState *st;
-    // SpeexPreprocessState *den;
 };
 
 
@@ -63,9 +60,6 @@ void EchoCancellerImpl::initialize_state()
     }
 
     speex_echo_ctl(st, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate);
-
-    // den = speex_preprocess_state_init(frame_size, sample_rate);
-    // speex_preprocess_ctl(den, SPEEX_PREPROCESS_SET_ECHO_STATE, st);
 }
 
 EchoCancellerImpl::~EchoCancellerImpl()
@@ -74,8 +68,6 @@ EchoCancellerImpl::~EchoCancellerImpl()
         speex_echo_state_destroy(st);
         st = nullptr;
     }
-
-    // speex_preprocess_state_destroy(den);
 }
 
 void EchoCancellerImpl::reset()
@@ -85,8 +77,5 @@ void EchoCancellerImpl::reset()
 
 void EchoCancellerImpl::process(const int16_t* near, const int16_t* far, int16_t* out)
 {
-    // out = near - filter(far)
     speex_echo_cancellation(st, near, far, out);
-
-    // speex_preprocess_run(den, out);
 }

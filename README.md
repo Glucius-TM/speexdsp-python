@@ -64,6 +64,8 @@ Last verified comparative benchmark run on Ubuntu with Python 3.11, frame size 2
 
 In the last verified run, the current build was still slower than the original by about 17.6%.
 
+The benchmark script now also reports creation time, p95 latency, peak Python allocations, and current lifecycle overhead (`reset()` / `destroy()`) so regressions show up in more than one dimension.
+
 ## API
 
 - `EchoCanceller.create(frame_size=256, filter_length=2048, sample_rate=16000, mics=1, speakers=1)`

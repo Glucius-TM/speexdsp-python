@@ -59,15 +59,7 @@ print(out.dtype, out.shape)
 
 ## Benchmark
 
-The benchmark harness compares the current binding against the original release using repeated runs, median aggregation, machine-readable JSON output, and optional `cProfile` capture. It reports creation time, `process()` latency, `process_into()` latency, p95, peak allocations, and `reset()` / `destroy()` overhead so the hot path can be measured from more than one angle.
-
-Latest verified run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations:
-
-- `process()`: 36.78 us/frame vs 36.63 us/frame original
-- `process_into()`: 36.76 us/frame vs 36.63 us/frame original
-- Relative speedup: 0.996x for `process()`, 0.997x for `process_into()`
-
-That places the current build essentially at parity with the original release, with `process_into()` still the closest path.
+The benchmark harness compares the current binding against the original release using the same isolated harness for both packages. Both sides are measured with the same inputs, warmup, repetition count, and median aggregation, so the shared comparison is fair. The script also reports current-only fast-path metrics (`process_into()`, `reset()`, and `destroy()`), machine-readable JSON, and optional `cProfile` output.
 
 ## API
 

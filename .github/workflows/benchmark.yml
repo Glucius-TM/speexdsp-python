@@ -21,7 +21,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libspeexdsp-dev
+          sudo apt-get install -y build-essential libspeexdsp-dev
 
       - name: Install current package
         run: pip install .

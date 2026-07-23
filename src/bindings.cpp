@@ -150,10 +150,10 @@ PYBIND11_MODULE(_speexdsp, m) {
                     py::arg("mics") = 1,
                     py::arg("speakers") = 1)
         .def("process", &PyEchoCanceller::process,
-             py::arg("near"), py::arg("far"),
+             py::arg("near").noconvert(), py::arg("far").noconvert(),
              R"pbdoc(Cancel echo using contiguous numpy int16 arrays. The returned array is a zero-copy view over an internal reusable buffer.)pbdoc")
         .def("process_into", &PyEchoCanceller::process_into,
-             py::arg("near"), py::arg("far"), py::arg("out"),
+             py::arg("near").noconvert(), py::arg("far").noconvert(), py::arg("out").noconvert(),
              R"pbdoc(Cancel echo in-place into a caller-provided contiguous numpy int16 array.)pbdoc")
         .def("reset", &PyEchoCanceller::reset)
         .def("destroy", &PyEchoCanceller::destroy)

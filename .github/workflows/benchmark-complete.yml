@@ -22,6 +22,11 @@ on:
           - '3.11'
           - '3.12'
           - '3.13'
+      profile:
+        description: 'Capture cProfile output for the current fast path'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   benchmark:
@@ -39,7 +44,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libspeexdsp-dev swig
+          sudo apt-get install -y build-essential libspeexdsp-dev
 
       - name: Install Python dependencies
         run: |
@@ -53,9 +58,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          PROFILE_FLAGS=""
+          if [[ "${{ inputs.profile }}" == "true" ]]; then
+            PROFILE_FLAGS="--profile --profile-output benchmark-profile.txt"
+          fi
+
           python benchmarks/compare_to_original.py \
             --frame-size "${{ inputs.frame_size }}" \
             --iterations "${{ inputs.iterations }}" \
+            ${PROFILE_FLAGS} \
             | tee benchmark-output.txt
 
           {
@@ -69,3 +80,10 @@ jobs:
         with:
           name: benchmark-output-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}
           path: benchmark-output.txt
+
+      - name: Upload profile output
+        if: ${{ inputs.profile }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-profile-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}
+          path: benchmark-profile.txt

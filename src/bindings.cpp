@@ -42,31 +42,34 @@ public:
     py::array process(py::array_t<int16_t, py::array::c_style> near,
                       py::array_t<int16_t, py::array::c_style> far) {
         ensure_alive();
+        py::array_t<int16_t> out(static_cast<py::ssize_t>(frame_samples_));
+        process_into(near, far, out);
+        return out;
+    }
 
-        if (near.ndim() != 1 || far.ndim() != 1) {
+    void process_into(py::array_t<int16_t, py::array::c_style> near,
+                      py::array_t<int16_t, py::array::c_style> far,
+                      py::array_t<int16_t, py::array::c_style> out) {
+        ensure_alive();
+
+        if (near.ndim() != 1 || far.ndim() != 1 || out.ndim() != 1) {
             throw py::type_error("expected one-dimensional contiguous int16 arrays");
         }
 
         if (static_cast<std::size_t>(near.size()) != frame_samples_ ||
-            static_cast<std::size_t>(far.size()) != frame_samples_) {
-            throw py::type_error("expected frame_size * mics int16 samples in each input array");
+            static_cast<std::size_t>(far.size()) != frame_samples_ ||
+            static_cast<std::size_t>(out.size()) != frame_samples_) {
+            throw py::type_error("expected frame_size * mics int16 samples in each array");
         }
 
         const auto* near_ptr = near.data();
         const auto* far_ptr = far.data();
+        auto* out_ptr = out.mutable_data();
 
         {
             py::gil_scoped_release release;
-            impl_->process(near_ptr, far_ptr, output_.data());
+            impl_->process(near_ptr, far_ptr, out_ptr);
         }
-
-        return py::array(
-            py::dtype::of<int16_t>(),
-            {static_cast<py::ssize_t>(frame_samples_)},
-            {static_cast<py::ssize_t>(kSampleBytes)},
-            output_.data(),
-            py::cast(this)
-        );
     }
 
     void reset() {
@@ -126,6 +129,9 @@ PYBIND11_MODULE(_speexdsp, m) {
         .def("process", &PyEchoCanceller::process,
              py::arg("near"), py::arg("far"),
              R"pbdoc(Cancel echo using contiguous numpy int16 arrays. The returned array is a zero-copy view over an internal reusable buffer.)pbdoc")
+        .def("process_into", &PyEchoCanceller::process_into,
+             py::arg("near"), py::arg("far"), py::arg("out"),
+             R"pbdoc(Cancel echo in-place into a caller-provided contiguous numpy int16 array.)pbdoc")
         .def("reset", &PyEchoCanceller::reset)
         .def("destroy", &PyEchoCanceller::destroy)
         .def_property_readonly("ok", &PyEchoCanceller::ok)

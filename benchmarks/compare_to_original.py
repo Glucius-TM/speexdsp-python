@@ -155,7 +155,7 @@ print(json.dumps(payload))
 def _profile_current(frame_size: int, iterations: int, profile_output: Path | None) -> str:
     profiler = cProfile.Profile()
     profiler.enable()
-    result = measure_current(frame_size, iterations)
+    measure_current(frame_size, iterations)
     profiler.disable()
 
     stream = io.StringIO()
@@ -205,7 +205,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compare the current SpeexDSP binding against the original PyPI release")
     parser.add_argument("--frame-size", type=int, default=DEFAULT_FRAME_SIZE)
     parser.add_argument("--iterations", type=int, default=5000)
-    parser.add_argument("--profile", action="store_true", help="Write cProfile output for the current fast path")
+    parser.add_argument("--profile", action="store_true", help="Write cProfile output for the benchmarked current path")
     parser.add_argument("--profile-output", type=str, default="", help="Path for the optional profile text output")
     args = parser.parse_args()
 
@@ -218,7 +218,7 @@ def main() -> None:
         profile_path = Path(args.profile_output) if args.profile_output else None
         profile_text = _profile_current(args.frame_size, args.iterations, profile_path)
         print()
-        print("cProfile (current fast path)")
+        print("cProfile (current benchmark run)")
         print(profile_text.rstrip())
 
 

@@ -39,14 +39,17 @@ public:
         return std::make_unique<PyEchoCanceller>(frame_size, filter_length, sample_rate, mics, speakers);
     }
 
-    py::array process(py::array_t<int16_t, py::array::c_style> near,
-                      py::array_t<int16_t, py::array::c_style> far) {
+    py::array process(py::buffer near_buf, py::buffer far_buf) {
         ensure_alive();
-        validate_frame_inputs(near, far);
+
+        auto near = near_buf.request();
+        auto far = far_buf.request();
+        validate_input_buffer(near, "near");
+        validate_input_buffer(far, "far");
 
         {
             py::gil_scoped_release release;
-            process_raw(near.data(), far.data(), output_.data());
+            process_raw(static_cast<const int16_t*>(near.ptr), static_cast<const int16_t*>(far.ptr), output_.data());
         }
 
         return py::array(
@@ -58,16 +61,19 @@ public:
         );
     }
 
-    void process_into(py::array_t<int16_t, py::array::c_style> near,
-                      py::array_t<int16_t, py::array::c_style> far,
-                      py::array_t<int16_t, py::array::c_style> out) {
+    void process_into(py::buffer near_buf, py::buffer far_buf, py::buffer out_buf) {
         ensure_alive();
-        validate_frame_inputs(near, far);
-        validate_output(out);
+
+        auto near = near_buf.request();
+        auto far = far_buf.request();
+        auto out = out_buf.request();
+        validate_input_buffer(near, "near");
+        validate_input_buffer(far, "far");
+        validate_output_buffer(out, "out");
 
         {
             py::gil_scoped_release release;
-            process_raw(near.data(), far.data(), out.mutable_data());
+            process_raw(static_cast<const int16_t*>(near.ptr), static_cast<const int16_t*>(far.ptr), static_cast<int16_t*>(out.ptr));
         }
     }
 
@@ -91,24 +97,31 @@ public:
     int speakers() const { return speakers_; }
 
 private:
-    void validate_frame_inputs(const py::array_t<int16_t, py::array::c_style>& near,
-                               const py::array_t<int16_t, py::array::c_style>& far) const {
-        if (near.ndim() != 1 || far.ndim() != 1) {
-            throw py::type_error("expected one-dimensional contiguous int16 arrays");
+    void validate_buffer_layout(const py::buffer_info& buf, const char* name, bool writable = false) const {
+        if (buf.ndim != 1) {
+            throw py::type_error(std::string("expected one-dimensional contiguous int16 ") + name + " buffer");
         }
-        if (static_cast<std::size_t>(near.size()) != frame_samples_ ||
-            static_cast<std::size_t>(far.size()) != frame_samples_) {
-            throw py::type_error("expected frame_size * mics int16 samples in each input array");
+        if (buf.itemsize != static_cast<py::ssize_t>(kSampleBytes)) {
+            throw py::type_error(std::string("expected int16 ") + name + " buffer");
         }
+        if (!buf.format.empty() && buf.format != py::format_descriptor<int16_t>::format()) {
+            throw py::type_error(std::string("expected int16 ") + name + " buffer");
+        }
+        if (static_cast<std::size_t>(buf.size) != frame_samples_) {
+            throw py::type_error(std::string("expected frame_size * mics int16 samples in ") + name + " buffer");
+        }
+        if (!buf.strides.empty() && static_cast<std::size_t>(buf.strides[0]) != kSampleBytes) {
+            throw py::type_error(std::string("expected C-contiguous int16 ") + name + " buffer");
+        }
+        (void)writable;
     }
 
-    void validate_output(const py::array_t<int16_t, py::array::c_style>& out) const {
-        if (out.ndim() != 1) {
-            throw py::type_error("expected one-dimensional contiguous int16 output array");
-        }
-        if (static_cast<std::size_t>(out.size()) != frame_samples_) {
-            throw py::type_error("expected frame_size * mics int16 samples in output array");
-        }
+    void validate_input_buffer(const py::buffer_info& buf, const char* name) const {
+        validate_buffer_layout(buf, name, false);
+    }
+
+    void validate_output_buffer(const py::buffer_info& buf, const char* name) const {
+        validate_buffer_layout(buf, name, true);
     }
 
     void process_raw(const int16_t* near, const int16_t* far, int16_t* out) const {
@@ -151,10 +164,10 @@ PYBIND11_MODULE(_speexdsp, m) {
                     py::arg("speakers") = 1)
         .def("process", &PyEchoCanceller::process,
              py::arg("near").noconvert(), py::arg("far").noconvert(),
-             R"pbdoc(Cancel echo using contiguous numpy int16 arrays. The returned array is a zero-copy view over an internal reusable buffer.)pbdoc")
+             R"pbdoc(Cancel echo using contiguous int16 buffers. The returned array is a zero-copy view over an internal reusable buffer.)pbdoc")
         .def("process_into", &PyEchoCanceller::process_into,
              py::arg("near").noconvert(), py::arg("far").noconvert(), py::arg("out").noconvert(),
-             R"pbdoc(Cancel echo in-place into a caller-provided contiguous numpy int16 array.)pbdoc")
+             R"pbdoc(Cancel echo in-place into a caller-provided contiguous int16 buffer.)pbdoc")
         .def("reset", &PyEchoCanceller::reset)
         .def("destroy", &PyEchoCanceller::destroy)
         .def_property_readonly("ok", &PyEchoCanceller::ok)

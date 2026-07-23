@@ -25,6 +25,7 @@ private:
     int sample_rate;
     int mics;
     int speakers;
+    bool single_channel;
 
     SpeexEchoState *st;
 };
@@ -42,6 +43,7 @@ EchoCancellerImpl::EchoCancellerImpl(int frame_size, int filter_length, int samp
       sample_rate(sample_rate),
       mics(mics),
       speakers(speakers),
+      single_channel(mics == 1 && speakers == 1),
       st(nullptr)
 {
     initialize_state();
@@ -54,9 +56,16 @@ void EchoCancellerImpl::initialize_state()
         st = nullptr;
     }
 
-    st = speex_echo_state_init_mc(frame_size, filter_length, mics, speakers);
-    if (st == nullptr) {
-        throw std::runtime_error("speex_echo_state_init_mc failed");
+    if (single_channel) {
+        st = speex_echo_state_init(frame_size, filter_length);
+        if (st == nullptr) {
+            throw std::runtime_error("speex_echo_state_init failed");
+        }
+    } else {
+        st = speex_echo_state_init_mc(frame_size, filter_length, mics, speakers);
+        if (st == nullptr) {
+            throw std::runtime_error("speex_echo_state_init_mc failed");
+        }
     }
 
     speex_echo_ctl(st, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate);
@@ -72,7 +81,13 @@ EchoCancellerImpl::~EchoCancellerImpl()
 
 void EchoCancellerImpl::reset()
 {
-    initialize_state();
+    if (st == nullptr) {
+        initialize_state();
+        return;
+    }
+
+    speex_echo_state_reset(st);
+    speex_echo_ctl(st, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate);
 }
 
 void EchoCancellerImpl::process(const int16_t* near, const int16_t* far, int16_t* out)

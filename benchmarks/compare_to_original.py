@@ -11,7 +11,7 @@ import tempfile
 import time
 import tracemalloc
 from pathlib import Path
-from statistics import mean
+from statistics import mean, median
 
 import numpy as np
 
@@ -22,6 +22,7 @@ DEFAULT_FRAME_SIZE = 256
 DEFAULT_FILTER_LENGTH = 2048
 DEFAULT_SAMPLE_RATE = 16000
 WARMUP_ITERS = 50
+DEFAULT_REPEATS = 3
 
 
 def _make_inputs(frame_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -128,6 +129,51 @@ def measure_current(frame_size: int, iterations: int) -> dict[str, dict[str, flo
         "reset": lifecycle["reset"],
         "destroy": lifecycle["destroy"],
     }
+
+
+def _aggregate_reports(reports: list[dict[str, dict[str, float]]]) -> dict[str, dict[str, float]]:
+    def _median_key(path: tuple[str, str]) -> float:
+        outer, inner = path
+        values = [report[outer][inner] for report in reports]
+        return float(median(values))
+
+    keys = {
+        "create": ("create", "us"),
+        "process_avg": ("process", "avg_us"),
+        "process_p95": ("process", "p95_us"),
+        "process_current_kb": ("process", "current_kb"),
+        "process_peak_kb": ("process", "peak_kb"),
+        "process_into_avg": ("process_into", "avg_us"),
+        "process_into_p95": ("process_into", "p95_us"),
+        "process_into_current_kb": ("process_into", "current_kb"),
+        "process_into_peak_kb": ("process_into", "peak_kb"),
+        "reset": ("reset", "us"),
+        "destroy": ("destroy", "us"),
+    }
+
+    aggregated = {
+        "create": {"us": _median_key(keys["create"])},
+        "process": {
+            "avg_us": _median_key(keys["process_avg"]),
+            "p95_us": _median_key(keys["process_p95"]),
+            "current_kb": _median_key(keys["process_current_kb"]),
+            "peak_kb": _median_key(keys["process_peak_kb"]),
+        },
+        "process_into": {
+            "avg_us": _median_key(keys["process_into_avg"]),
+            "p95_us": _median_key(keys["process_into_p95"]),
+            "current_kb": _median_key(keys["process_into_current_kb"]),
+            "peak_kb": _median_key(keys["process_into_peak_kb"]),
+        },
+        "reset": {"us": _median_key(keys["reset"])},
+        "destroy": {"us": _median_key(keys["destroy"])},
+    }
+    return aggregated
+
+
+def _measure_current_repeated(frame_size: int, iterations: int, repeats: int) -> dict[str, object]:
+    runs = [measure_current(frame_size, iterations) for _ in range(repeats)]
+    return {"aggregate": _aggregate_reports(runs), "runs": runs}
 
 
 def _venv_python(venv_dir: Path) -> Path:
@@ -240,14 +286,33 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compare the current SpeexDSP binding against the original PyPI release")
     parser.add_argument("--frame-size", type=int, default=DEFAULT_FRAME_SIZE)
     parser.add_argument("--iterations", type=int, default=5000)
+    parser.add_argument("--repeats", type=int, default=DEFAULT_REPEATS, help="Repeat the benchmark and use the median run")
+    parser.add_argument("--json-output", type=str, default="", help="Optional path for machine-readable JSON output")
     parser.add_argument("--profile", action="store_true", help="Write cProfile output for the benchmarked current fast path")
     parser.add_argument("--profile-output", type=str, default="", help="Path for the optional profile text output")
     args = parser.parse_args()
 
-    current = measure_current(args.frame_size, args.iterations)
+    if args.repeats < 1:
+        raise SystemExit("--repeats must be at least 1")
+
+    current_report = _measure_current_repeated(args.frame_size, args.iterations, args.repeats)
+    current = current_report["aggregate"]
     original = measure_original(args.frame_size, args.iterations)
 
-    print(_render_report(args.frame_size, args.iterations, current, original))
+    report_text = _render_report(args.frame_size, args.iterations, current, original)
+    print(report_text)
+
+    if args.json_output:
+        payload = {
+            "frame_size": args.frame_size,
+            "iterations": args.iterations,
+            "repeats": args.repeats,
+            "original_spec": ORIGINAL_SPEC,
+            "current": current,
+            "current_runs": current_report["runs"],
+            "original": original,
+        }
+        Path(args.json_output).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
     if args.profile:
         profile_path = Path(args.profile_output) if args.profile_output else None

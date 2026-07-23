@@ -42,33 +42,32 @@ public:
     py::array process(py::array_t<int16_t, py::array::c_style> near,
                       py::array_t<int16_t, py::array::c_style> far) {
         ensure_alive();
-        py::array_t<int16_t> out(static_cast<py::ssize_t>(frame_samples_));
-        process_into(near, far, out);
-        return out;
+        validate_frame_inputs(near, far);
+
+        {
+            py::gil_scoped_release release;
+            process_raw(near.data(), far.data(), output_.data());
+        }
+
+        return py::array(
+            py::dtype::of<int16_t>(),
+            {static_cast<py::ssize_t>(frame_samples_)},
+            {static_cast<py::ssize_t>(kSampleBytes)},
+            output_.data(),
+            py::cast(this)
+        );
     }
 
     void process_into(py::array_t<int16_t, py::array::c_style> near,
                       py::array_t<int16_t, py::array::c_style> far,
                       py::array_t<int16_t, py::array::c_style> out) {
         ensure_alive();
-
-        if (near.ndim() != 1 || far.ndim() != 1 || out.ndim() != 1) {
-            throw py::type_error("expected one-dimensional contiguous int16 arrays");
-        }
-
-        if (static_cast<std::size_t>(near.size()) != frame_samples_ ||
-            static_cast<std::size_t>(far.size()) != frame_samples_ ||
-            static_cast<std::size_t>(out.size()) != frame_samples_) {
-            throw py::type_error("expected frame_size * mics int16 samples in each array");
-        }
-
-        const auto* near_ptr = near.data();
-        const auto* far_ptr = far.data();
-        auto* out_ptr = out.mutable_data();
+        validate_frame_inputs(near, far);
+        validate_output(out);
 
         {
             py::gil_scoped_release release;
-            impl_->process(near_ptr, far_ptr, out_ptr);
+            process_raw(near.data(), far.data(), out.mutable_data());
         }
     }
 
@@ -92,6 +91,26 @@ public:
     int speakers() const { return speakers_; }
 
 private:
+    static void validate_frame_inputs(const py::array_t<int16_t, py::array::c_style>& near,
+                                      const py::array_t<int16_t, py::array::c_style>& far) {
+        if (near.ndim() != 1 || far.ndim() != 1) {
+            throw py::type_error("expected one-dimensional contiguous int16 arrays");
+        }
+    }
+
+    void validate_output(const py::array_t<int16_t, py::array::c_style>& out) const {
+        if (out.ndim() != 1) {
+            throw py::type_error("expected one-dimensional contiguous int16 output array");
+        }
+        if (static_cast<std::size_t>(out.size()) != frame_samples_) {
+            throw py::type_error("expected frame_size * mics int16 samples in output array");
+        }
+    }
+
+    void process_raw(const int16_t* near, const int16_t* far, int16_t* out) const {
+        impl_->process(near, far, out);
+    }
+
     void ensure_alive() const {
         if (!impl_) {
             throw std::runtime_error("EchoCanceller has been destroyed");

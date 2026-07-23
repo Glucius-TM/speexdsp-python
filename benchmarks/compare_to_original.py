@@ -54,8 +54,8 @@ def _summarize_timings(timings: list[float], current_kb: float, peak_kb: float) 
     }
 
 
-def measure_current(frame_size: int, iterations: int) -> dict[str, dict[str, float]]:
-    near, far, out = _make_inputs(frame_size)
+def _measure_current_process(frame_size: int, iterations: int) -> dict[str, dict[str, float]]:
+    near, far, _ = _make_inputs(frame_size)
 
     t0 = time.perf_counter()
     ec = EchoCanceller.create(frame_size, DEFAULT_FILTER_LENGTH, DEFAULT_SAMPLE_RATE)
@@ -63,35 +63,70 @@ def measure_current(frame_size: int, iterations: int) -> dict[str, dict[str, flo
 
     for _ in range(WARMUP_ITERS):
         ec.process(near, far)
-        ec.process_into(near, far, out)
 
     process_timings, process_current_kb, process_peak_kb = _timed_loop(
         lambda: ec.process(near, far),
         iterations,
     )
-    process_into_timings, process_into_current_kb, process_into_peak_kb = _timed_loop(
-        lambda: ec.process_into(near, far, out),
-        iterations,
-    )
-
-    t1 = time.perf_counter()
-    ec.reset()
-    reset_s = time.perf_counter() - t1
-
-    t2 = time.perf_counter()
-    ec.destroy()
-    destroy_s = time.perf_counter() - t2
 
     return {
         "create": {"us": create_s * 1e6},
         "process": {
             **_summarize_timings(process_timings, process_current_kb, process_peak_kb),
         },
+    }
+
+
+def _measure_current_process_into(frame_size: int, iterations: int) -> dict[str, dict[str, float]]:
+    near, far, out = _make_inputs(frame_size)
+
+    ec = EchoCanceller.create(frame_size, DEFAULT_FILTER_LENGTH, DEFAULT_SAMPLE_RATE)
+    for _ in range(WARMUP_ITERS):
+        ec.process_into(near, far, out)
+
+    process_into_timings, process_into_current_kb, process_into_peak_kb = _timed_loop(
+        lambda: ec.process_into(near, far, out),
+        iterations,
+    )
+
+    return {
         "process_into": {
             **_summarize_timings(process_into_timings, process_into_current_kb, process_into_peak_kb),
-        },
+        }
+    }
+
+
+def _measure_current_lifecycle(frame_size: int) -> dict[str, dict[str, float]]:
+    t1 = time.perf_counter()
+    ec = EchoCanceller.create(frame_size, DEFAULT_FILTER_LENGTH, DEFAULT_SAMPLE_RATE)
+    create_s = time.perf_counter() - t1
+
+    t2 = time.perf_counter()
+    ec.reset()
+    reset_s = time.perf_counter() - t2
+
+    t3 = time.perf_counter()
+    ec.destroy()
+    destroy_s = time.perf_counter() - t3
+
+    return {
+        "create": {"us": create_s * 1e6},
         "reset": {"us": reset_s * 1e6},
         "destroy": {"us": destroy_s * 1e6},
+    }
+
+
+def measure_current(frame_size: int, iterations: int) -> dict[str, dict[str, float]]:
+    current_process = _measure_current_process(frame_size, iterations)
+    current_into = _measure_current_process_into(frame_size, iterations)
+    lifecycle = _measure_current_lifecycle(frame_size)
+
+    return {
+        "create": current_process["create"],
+        "process": current_process["process"],
+        "process_into": current_into["process_into"],
+        "reset": lifecycle["reset"],
+        "destroy": lifecycle["destroy"],
     }
 
 
@@ -155,7 +190,7 @@ print(json.dumps(payload))
 def _profile_current(frame_size: int, iterations: int, profile_output: Path | None) -> str:
     profiler = cProfile.Profile()
     profiler.enable()
-    measure_current(frame_size, iterations)
+    _measure_current_process_into(frame_size, iterations)
     profiler.disable()
 
     stream = io.StringIO()
@@ -205,7 +240,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compare the current SpeexDSP binding against the original PyPI release")
     parser.add_argument("--frame-size", type=int, default=DEFAULT_FRAME_SIZE)
     parser.add_argument("--iterations", type=int, default=5000)
-    parser.add_argument("--profile", action="store_true", help="Write cProfile output for the benchmarked current path")
+    parser.add_argument("--profile", action="store_true", help="Write cProfile output for the benchmarked current fast path")
     parser.add_argument("--profile-output", type=str, default="", help="Path for the optional profile text output")
     args = parser.parse_args()
 

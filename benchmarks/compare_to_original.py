@@ -182,17 +182,8 @@ def _venv_python(venv_dir: Path) -> Path:
     return venv_dir / "bin" / "python"
 
 
-def measure_original(frame_size: int, iterations: int) -> dict[str, float]:
-    with tempfile.TemporaryDirectory(prefix="speexdsp-original-") as tmp:
-        tmpdir = Path(tmp)
-        venv_dir = tmpdir / "venv"
-        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
-        py = _venv_python(venv_dir)
-
-        subprocess.run([str(py), "-m", "pip", "install", "--upgrade", "pip"], check=True)
-        subprocess.run([str(py), "-m", "pip", "install", ORIGINAL_SPEC], check=True)
-
-        code = f"""
+def _measure_original_once(frame_size: int, iterations: int, py: Path) -> dict[str, float]:
+    code = f"""
 import json
 import time
 import tracemalloc
@@ -229,8 +220,33 @@ payload = {{
 }}
 print(json.dumps(payload))
 """.strip()
-        raw = subprocess.check_output([str(py), "-c", code], text=True).strip()
-        return json.loads(raw)
+    raw = subprocess.check_output([str(py), "-c", code], text=True).strip()
+    return json.loads(raw)
+
+
+def _measure_original_repeated(frame_size: int, iterations: int, repeats: int) -> dict[str, object]:
+    with tempfile.TemporaryDirectory(prefix="speexdsp-original-") as tmp:
+        tmpdir = Path(tmp)
+        venv_dir = tmpdir / "venv"
+        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+        py = _venv_python(venv_dir)
+
+        subprocess.run([str(py), "-m", "pip", "install", "--upgrade", "pip"], check=True)
+        subprocess.run([str(py), "-m", "pip", "install", ORIGINAL_SPEC], check=True)
+
+        runs = [_measure_original_once(frame_size, iterations, py) for _ in range(repeats)]
+
+        def _median_key(key: str) -> float:
+            return float(median(run[key] for run in runs))
+
+        aggregate = {
+            "create_us": _median_key("create_us"),
+            "avg_us": _median_key("avg_us"),
+            "p95_us": _median_key("p95_us"),
+            "current_kb": _median_key("current_kb"),
+            "peak_kb": _median_key("peak_kb"),
+        }
+        return {"aggregate": aggregate, "runs": runs}
 
 
 def _profile_current(frame_size: int, iterations: int, profile_output: Path | None) -> str:
@@ -297,7 +313,8 @@ def main() -> None:
 
     current_report = _measure_current_repeated(args.frame_size, args.iterations, args.repeats)
     current = current_report["aggregate"]
-    original = measure_original(args.frame_size, args.iterations)
+    original_report = _measure_original_repeated(args.frame_size, args.iterations, args.repeats)
+    original = original_report["aggregate"]
 
     report_text = _render_report(args.frame_size, args.iterations, current, original)
     print(report_text)
@@ -311,6 +328,7 @@ def main() -> None:
             "current": current,
             "current_runs": current_report["runs"],
             "original": original,
+            "original_runs": original_report["runs"],
         }
         Path(args.json_output).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 

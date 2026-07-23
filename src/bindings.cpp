@@ -91,10 +91,14 @@ public:
     int speakers() const { return speakers_; }
 
 private:
-    static void validate_frame_inputs(const py::array_t<int16_t, py::array::c_style>& near,
-                                      const py::array_t<int16_t, py::array::c_style>& far) {
+    void validate_frame_inputs(const py::array_t<int16_t, py::array::c_style>& near,
+                               const py::array_t<int16_t, py::array::c_style>& far) const {
         if (near.ndim() != 1 || far.ndim() != 1) {
             throw py::type_error("expected one-dimensional contiguous int16 arrays");
+        }
+        if (static_cast<std::size_t>(near.size()) != frame_samples_ ||
+            static_cast<std::size_t>(far.size()) != frame_samples_) {
+            throw py::type_error("expected frame_size * mics int16 samples in each input array");
         }
     }
 

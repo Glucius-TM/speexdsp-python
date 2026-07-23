@@ -13,6 +13,11 @@ on:
         required: true
         default: '2000'
         type: string
+      repeats:
+        description: 'How many runs to repeat and median-aggregate'
+        required: true
+        default: '3'
+        type: string
       python_version:
         description: 'Python version used for the benchmark'
         required: true
@@ -66,6 +71,8 @@ jobs:
           python benchmarks/compare_to_original.py \
             --frame-size "${{ inputs.frame_size }}" \
             --iterations "${{ inputs.iterations }}" \
+            --repeats "${{ inputs.repeats }}" \
+            --json-output benchmark-result.json \
             ${PROFILE_FLAGS} \
             | tee benchmark-output.txt
 
@@ -78,12 +85,18 @@ jobs:
       - name: Upload benchmark output
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-output-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}
+          name: benchmark-output-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}-r${{ inputs.repeats }}
           path: benchmark-output.txt
+
+      - name: Upload benchmark JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-json-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}-r${{ inputs.repeats }}
+          path: benchmark-result.json
 
       - name: Upload profile output
         if: ${{ inputs.profile }}
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-profile-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}
+          name: benchmark-profile-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}-r${{ inputs.repeats }}
           path: benchmark-profile.txt

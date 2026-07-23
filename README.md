@@ -59,17 +59,7 @@ print(out.dtype, out.shape)
 
 ## Benchmark
 
-Latest verified comparative benchmark run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations.
-
-| Path | Avg time | Relative |
-| --- | ---: | ---: |
-| Current build (`process`) | 40.12 us/frame | 0.979x |
-| Current build (`process_into`) | 39.77 us/frame | 0.988x |
-| Original release (`speexdsp==0.1.1`) | 39.28 us/frame | 1.000x |
-
-In the latest verified run, `process_into()` was the closest path to the original, but it was still about 1.2% slower.
-
-The benchmark now runs multiple repetitions, uses the median report for stability, can write machine-readable JSON, and still reports creation time, p95 latency, peak Python allocations, `process_into()` timing, and current lifecycle overhead (`reset()` / `destroy()`). It can also emit `cProfile` output for the benchmarked current path when profiling is enabled.
+The benchmark harness compares the current binding against the original release using repeated runs, median aggregation, machine-readable JSON output, and optional `cProfile` capture. It reports creation time, `process()` latency, `process_into()` latency, p95, peak allocations, and `reset()` / `destroy()` overhead so the hot path can be measured from more than one angle.
 
 ## API
 

@@ -59,16 +59,17 @@ print(out.dtype, out.shape)
 
 ## Benchmark
 
-Last verified comparative benchmark run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations.
+Latest verified comparative benchmark run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations.
 
-| Version | Avg time | Relative |
+| Path | Avg time | Relative |
 | --- | ---: | ---: |
-| Current pybind11 build | 43.58 us/frame | 0.851x |
-| Original release (`speexdsp==0.1.1`) | 37.07 us/frame | 1.000x |
+| Current build (`process`) | 45.94 us/frame | 0.801x |
+| Current build (`process_into`) | 38.26 us/frame | 0.962x |
+| Original release (`speexdsp==0.1.1`) | 36.80 us/frame | 1.000x |
 
-In the last verified run, the current build was still slower than the original by about 17.6%.
+In the latest verified run, `process_into()` was the closest path to the original, but it was still about 3.8% slower.
 
-The benchmark script now also reports creation time, p95 latency, peak Python allocations, `process_into()` timing, and current lifecycle overhead (`reset()` / `destroy()`). It can also emit `cProfile` output for the current fast path when profiling is enabled.
+The benchmark script also reports creation time, p95 latency, peak Python allocations, `process_into()` timing, and current lifecycle overhead (`reset()` / `destroy()`). It can also emit `cProfile` output for the benchmarked current path when profiling is enabled.
 
 ## API
 

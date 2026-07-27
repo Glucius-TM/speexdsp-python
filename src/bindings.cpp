@@ -46,12 +46,12 @@ public:
         validate_input_array(near_arr, "near");
         validate_input_array(far_arr, "far");
 
-        auto near = near_arr.unchecked<1>();
-        auto far = far_arr.unchecked<1>();
+        const int16_t* near = near_arr.data();
+        const int16_t* far = far_arr.data();
 
         {
             py::gil_scoped_release release;
-            process_raw(&near(0), &far(0), output_.data());
+            process_raw(near, far, output_.data());
         }
 
         return py::array(
@@ -71,13 +71,13 @@ public:
         validate_input_array(far_arr, "far");
         validate_output_array(out_arr, "out");
 
-        auto near = near_arr.unchecked<1>();
-        auto far = far_arr.unchecked<1>();
-        auto out = out_arr.mutable_unchecked<1>();
+        const int16_t* near = near_arr.data();
+        const int16_t* far = far_arr.data();
+        int16_t* out = out_arr.mutable_data();
 
         {
             py::gil_scoped_release release;
-            process_raw(&near(0), &far(0), &out(0));
+            process_raw(near, far, out);
         }
     }
 

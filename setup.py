@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 from pathlib import Path
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
@@ -17,6 +18,18 @@ def _split_env_paths(name: str) -> list[str]:
     return [part for part in raw.split(os.pathsep) if part]
 
 
+def _release_compile_args() -> list[str]:
+    if sys.platform.startswith('win'):
+        return ['/O2', '/GL', '/DNDEBUG']
+    return ['-O3', '-DNDEBUG', '-flto']
+
+
+def _release_link_args() -> list[str]:
+    if sys.platform.startswith('win'):
+        return ['/LTCG']
+    return ['-flto']
+
+
 include_dirs = ['src'] + _split_env_paths('SPEEXDSP_INCLUDE_DIR')
 library_dirs = _split_env_paths('SPEEXDSP_LIBRARY_DIR')
 
@@ -28,6 +41,8 @@ ext_modules = [
         library_dirs=library_dirs,
         libraries=['speexdsp'],
         cxx_std=14,
+        extra_compile_args=_release_compile_args(),
+        extra_link_args=_release_link_args(),
     )
 ]
 

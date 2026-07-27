@@ -98,14 +98,11 @@ public:
     int speakers() const { return speakers_; }
 
 private:
-    void validate_buffer_layout(const py::buffer_info& buf, const char* name, bool writable = false) const {
+    void validate_buffer_layout(const py::buffer_info& buf, const char* name) const {
         if (buf.ndim != 1) {
             throw py::type_error(std::string("expected one-dimensional contiguous int16 ") + name + " buffer");
         }
         if (buf.itemsize != static_cast<py::ssize_t>(kSampleBytes)) {
-            throw py::type_error(std::string("expected int16 ") + name + " buffer");
-        }
-        if (!buf.format.empty() && buf.format != py::format_descriptor<int16_t>::format()) {
             throw py::type_error(std::string("expected int16 ") + name + " buffer");
         }
         if (static_cast<std::size_t>(buf.size) != frame_samples_) {
@@ -114,15 +111,14 @@ private:
         if (!buf.strides.empty() && static_cast<std::size_t>(buf.strides[0]) != kSampleBytes) {
             throw py::type_error(std::string("expected C-contiguous int16 ") + name + " buffer");
         }
-        (void)writable;
     }
 
     void validate_input_buffer(const py::buffer_info& buf, const char* name) const {
-        validate_buffer_layout(buf, name, false);
+        validate_buffer_layout(buf, name);
     }
 
     void validate_output_buffer(const py::buffer_info& buf, const char* name) const {
-        validate_buffer_layout(buf, name, true);
+        validate_buffer_layout(buf, name);
     }
 
     void process_raw(const int16_t* near, const int16_t* far, int16_t* out) const {

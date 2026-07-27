@@ -13,8 +13,6 @@ import tracemalloc
 from pathlib import Path
 from statistics import mean, median
 
-import numpy as np
-
 ORIGINAL_SPEC = "speexdsp==0.1.1"
 DEFAULT_FRAME_SIZE = 256
 DEFAULT_FILTER_LENGTH = 2048
@@ -34,7 +32,37 @@ def _run(cmd: list[str], *, cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=str(cwd) if cwd is not None else None, check=True)
 
 
-def _shared_code(frame_size: int, iterations: int, repeats: int) -> str:
+def _install_target(py: Path, target: str) -> None:
+    _run([str(py), "-m", "pip", "install", "--upgrade", "pip"])
+    _run([str(py), "-m", "pip", "install", "numpy", "pybind11"])
+    _run([str(py), "-m", "pip", "install", target], cwd=REPO_ROOT)
+
+
+def _run_json_in_venv(target: str, code: str) -> dict[str, float]:
+    with tempfile.TemporaryDirectory(prefix="speexdsp-bench-") as tmp:
+        venv_dir = Path(tmp) / "venv"
+        _run([sys.executable, "-m", "venv", str(venv_dir)])
+        py = _venv_python(venv_dir)
+        _install_target(py, target)
+        raw = subprocess.check_output([str(py), "-c", code], cwd=REPO_ROOT, text=True).strip()
+        return json.loads(raw)
+
+
+def _shared_code(frame_size: int, iterations: int, repeats: int, *, api_kind: str) -> str:
+    if api_kind == "current":
+        input_setup = """
+    near = np.zeros(frame_size, dtype=np.int16)
+    far = np.zeros(frame_size, dtype=np.int16)
+    call = lambda: ec.process(near, far)
+"""
+    elif api_kind == "original":
+        input_setup = """
+    chunk = b'\\0\\0' * frame_size
+    call = lambda: ec.process(chunk, chunk)
+"""
+    else:
+        raise ValueError(f"unknown api_kind: {api_kind}")
+
     return f"""
 import gc
 import json
@@ -56,21 +84,19 @@ process_current_kbs = []
 process_peak_kbs = []
 
 for _ in range(repeats):
-    near = np.zeros(frame_size, dtype=np.int16)
-    far = np.zeros(frame_size, dtype=np.int16)
-
+{input_setup.rstrip()}
     t0 = time.perf_counter()
     ec = EchoCanceller.create(frame_size, {DEFAULT_FILTER_LENGTH}, {DEFAULT_SAMPLE_RATE})
     create_times.append((time.perf_counter() - t0) * 1e6)
 
     for _ in range({WARMUP_ITERS}):
-        ec.process(near, far)
+        call()
 
     tracemalloc.start()
     timings = []
     for _ in range(iterations):
         start = time.perf_counter()
-        ec.process(near, far)
+        call()
         timings.append(time.perf_counter() - start)
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
@@ -164,30 +190,32 @@ print(json.dumps(payload))
 """.strip()
 
 
-def _install_target(py: Path, target: str) -> None:
-    _run([str(py), "-m", "pip", "install", "--upgrade", "pip"])
-    _run([str(py), "-m", "pip", "install", "numpy", "pybind11"])
-    _run([str(py), "-m", "pip", "install", target], cwd=REPO_ROOT)
-
-
-def _run_json_in_venv(target: str, code: str) -> dict[str, float]:
-    with tempfile.TemporaryDirectory(prefix="speexdsp-bench-") as tmp:
-        venv_dir = Path(tmp) / "venv"
-        _run([sys.executable, "-m", "venv", str(venv_dir)])
-        py = _venv_python(venv_dir)
-        _install_target(py, target)
-        raw = subprocess.check_output([str(py), "-c", code], cwd=REPO_ROOT, text=True).strip()
-        return json.loads(raw)
-
-
 def measure_shared(target: str, frame_size: int, iterations: int, repeats: int) -> dict[str, float]:
-    code = _shared_code(frame_size, iterations, repeats)
+    api_kind = "current" if target == "." else "original"
+    code = _shared_code(frame_size, iterations, repeats, api_kind=api_kind)
     return _run_json_in_venv(target, code)
 
 
 def measure_current_extras(frame_size: int, iterations: int, repeats: int) -> dict[str, float]:
     code = _current_extras_code(frame_size, iterations, repeats)
     return _run_json_in_venv(".", code)
+
+
+def _profile_current_extras(frame_size: int, iterations: int, profile_output: Path | None) -> str:
+    profiler = cProfile.Profile()
+    profiler.enable()
+    measure_current_extras(frame_size, iterations, 1)
+    profiler.disable()
+
+    stream = io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream).sort_stats("cumulative")
+    stats.print_stats(20)
+    profile_text = stream.getvalue()
+
+    if profile_output is not None:
+        profile_output.write_text(profile_text, encoding="utf-8")
+
+    return profile_text
 
 
 def _render_report(frame_size: int, iterations: int, repeats: int, current_shared: dict[str, float], original_shared: dict[str, float], current_extras: dict[str, float]) -> str:
@@ -199,7 +227,7 @@ def _render_report(frame_size: int, iterations: int, repeats: int, current_share
         f"Iterations:    {iterations}",
         f"Repeats:       {repeats}",
         "",
-        "Comparable benchmark (same harness for both packages)",
+        "Comparable benchmark (same harness, API-specific adapter)",
         f"  Current create:  {current_shared['create_us']:.2f} us",
         f"  Original create: {original_shared['create_us']:.2f} us",
         f"  Current process avg:  {current_shared['process_avg_us']:.2f} us/frame",
@@ -258,23 +286,6 @@ def main() -> None:
         print()
         print("cProfile (current process_into fast path)")
         print(profile_text.rstrip())
-
-
-def _profile_current_extras(frame_size: int, iterations: int, profile_output: Path | None) -> str:
-    profiler = cProfile.Profile()
-    profiler.enable()
-    measure_current_extras(frame_size, iterations, 1)
-    profiler.disable()
-
-    stream = io.StringIO()
-    stats = pstats.Stats(profiler, stream=stream).sort_stats("cumulative")
-    stats.print_stats(20)
-    profile_text = stream.getvalue()
-
-    if profile_output is not None:
-        profile_output.write_text(profile_text, encoding="utf-8")
-
-    return profile_text
 
 
 if __name__ == "__main__":

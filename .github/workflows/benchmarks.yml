@@ -1,0 +1,107 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      frame_size:
+        description: Frame size in samples
+        required: true
+        default: '256'
+        type: string
+      iterations:
+        description: Minimum timed calls per pass
+        required: true
+        default: '25000'
+        type: string
+      repeats:
+        description: Number of benchmark passes
+        required: true
+        default: '7'
+        type: string
+      warmup_iters:
+        description: Warmup calls before timing
+        required: true
+        default: '250'
+        type: string
+      min_sample_seconds:
+        description: Minimum wall time per pass
+        required: true
+        default: '1.5'
+        type: string
+      python_version:
+        description: Python version used for the benchmark
+        required: true
+        default: '3.11'
+        type: choice
+        options:
+          - '3.11'
+          - '3.12'
+          - '3.13'
+          - '3.14'
+      profile:
+        description: Capture cProfile output for the current fast path
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libspeexdsp-dev
+
+      - name: Run benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE_FLAGS=""
+          if [[ "${{ inputs.profile }}" == "true" ]]; then
+            PROFILE_FLAGS="--profile --profile-output benchmark-profile.txt"
+          fi
+
+          python benchmarks/compare_to_original.py \
+            --frame-size "${{ inputs.frame_size }}" \
+            --iterations "${{ inputs.iterations }}" \
+            --repeats "${{ inputs.repeats }}" \
+            --warmup-iters "${{ inputs.warmup_iters }}" \
+            --min-sample-seconds "${{ inputs.min_sample_seconds }}" \
+            --json-output benchmark-result.json \
+            ${PROFILE_FLAGS} \
+            | tee benchmark-output.txt
+
+          {
+            echo "## Benchmark results"
+            echo
+            cat benchmark-output.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-output-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}-r${{ inputs.repeats }}
+          path: benchmark-output.txt
+
+      - name: Upload benchmark JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-json-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}-r${{ inputs.repeats }}
+          path: benchmark-result.json
+
+      - name: Upload profile output
+        if: ${{ inputs.profile }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-profile-py${{ inputs.python_version }}-fs${{ inputs.frame_size }}-it${{ inputs.iterations }}-r${{ inputs.repeats }}
+          path: benchmark-profile.txt

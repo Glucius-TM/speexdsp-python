@@ -48,14 +48,18 @@ public:
         validate_input_buffer(near, "near");
         validate_input_buffer(far, "far");
 
-        ensure_output_view();
-
         {
             py::gil_scoped_release release;
             process_raw(static_cast<const int16_t*>(near.ptr), static_cast<const int16_t*>(far.ptr), output_.data());
         }
 
-        return output_view_;
+        return py::array(
+            py::dtype::of<int16_t>(),
+            {static_cast<py::ssize_t>(frame_samples_)},
+            {static_cast<py::ssize_t>(kSampleBytes)},
+            output_.data(),
+            py::cast(this)
+        );
     }
 
     void process_into(py::buffer near_buf, py::buffer far_buf, py::buffer out_buf) {
@@ -94,18 +98,6 @@ public:
     int speakers() const { return speakers_; }
 
 private:
-    void ensure_output_view() {
-        if (!output_view_) {
-            output_view_ = py::array(
-                py::dtype::of<int16_t>(),
-                {static_cast<py::ssize_t>(frame_samples_)},
-                {static_cast<py::ssize_t>(kSampleBytes)},
-                output_.data(),
-                py::cast(this)
-            );
-        }
-    }
-
     void validate_buffer_layout(const py::buffer_info& buf, const char* name) const {
         if (buf.ndim != 1) {
             throw py::type_error(std::string("expected one-dimensional contiguous int16 ") + name + " buffer");
@@ -146,7 +138,6 @@ private:
     int speakers_;
     std::size_t frame_samples_;
     std::vector<int16_t> output_;
-    py::array output_view_;
     std::unique_ptr<EchoCanceller> impl_;
 };
 

@@ -57,21 +57,6 @@ print(out.dtype, out.shape)
 - Recommended frame size: 10–20 ms.
 - Recommended filter tail: 100–500 ms.
 
-## Benchmark
-
-The benchmark harness compares the current binding against the original release using the same isolated harness for both packages. Both sides are measured with the same inputs, warmup, repetition count, and median aggregation, so the shared comparison is fair. The script also reports current-only fast-path metrics (`process_into()`, `reset()`, and `destroy()`), machine-readable JSON, and optional `cProfile` output.
-
-Latest verified run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations:
-
-- Current `process()`: 34.99 us/frame
-- Original `process()`: 35.30 us/frame
-- Relative speedup: 1.009x
-- Current `process_into()`: 38.66 us/frame
-- Current `create()`: 37.60 us
-- Original `create()`: 39.15 us
-
-That means the current build is now slightly faster than the original on the shared `process()` benchmark. `process_into()` remains available as the lower-allocation path for callers that want to reuse an output buffer.
-
 ## API
 
 - `EchoCanceller.create(frame_size=256, filter_length=2048, sample_rate=16000, mics=1, speakers=1)`

@@ -201,12 +201,14 @@ for _ in range(repeats):
     reset_samples = []
     destroy_samples = []
     for _ in range(5):
+        sample_ec = EchoCanceller.create(frame_size, {DEFAULT_FILTER_LENGTH}, {DEFAULT_SAMPLE_RATE})
         t0 = time.perf_counter()
-        ec.reset()
+        sample_ec.reset()
         reset_samples.append((time.perf_counter() - t0) * 1e6)
         t1 = time.perf_counter()
-        ec.destroy()
+        sample_ec.destroy()
         destroy_samples.append((time.perf_counter() - t1) * 1e6)
+        del sample_ec
 
     reset_times.append(median(reset_samples))
     destroy_times.append(median(destroy_samples))

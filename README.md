@@ -57,20 +57,11 @@ print(out.dtype, out.shape)
 - Recommended frame size: 10–20 ms.
 - Recommended filter tail: 100–500 ms.
 
-## Benchmark
+## Benchmarks
 
-The benchmark harness compares the current binding against the original release using the same isolated harness for both packages. Both sides are measured with the same inputs, warmup, repetition count, and median aggregation, so the shared comparison is fair. The script also reports current-only fast-path metrics (`process_into()`, `reset()`, and `destroy()`), machine-readable JSON, and optional `cProfile` output.
+Use the `Benchmarks` workflow in `.github/workflows/benchmarks.yml` to compare the current binding against the original release. The harness is intentionally longer and more stable than before: it runs 7 passes by default, takes at least 25,000 timed calls per pass, warms up each pass 250 times, and keeps timing each pass open for at least 1.5 seconds before aggregating with the median.
 
-Latest verified run on Ubuntu with Python 3.11, frame size 256, and 2000 iterations:
-
-- Current `process()`: 34.99 us/frame
-- Original `process()`: 35.30 us/frame
-- Relative speedup: 1.009x
-- Current `process_into()`: 38.66 us/frame
-- Current `create()`: 37.60 us
-- Original `create()`: 39.15 us
-
-That means the current build is now slightly faster than the original on the shared `process()` benchmark. `process_into()` remains available as the lower-allocation path for callers that want to reuse an output buffer.
+The workflow writes a text summary, a JSON file, and an optional `cProfile` output artifact when profiling is enabled.
 
 ## API
 
